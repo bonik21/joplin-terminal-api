@@ -1,32 +1,36 @@
 #!/bin/sh
 
-echo "---------------------------"
-echo "Cleaning aborted temp lock files..."
+echo "=================================================="
+echo " Starting Joplin Terminal REST API Gateway"
+echo "=================================================="
+
+echo "[init] Clearing residual temporary files..."
 rm -rf /tmp/* 2>&1
 
-echo "Running Joplin version: $JOPLIN_VERSION"
+current=$(joplin version 2>/dev/null | head -n 1 | sed -E 's/.*([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+if [ -z "$current" ] && [ -f "/app/joplin/lib/node_modules/joplin/package.json" ]; then
+  current=$(jq -r '.version // empty' /app/joplin/lib/node_modules/joplin/package.json 2>/dev/null)
+fi
+current=${current:-$JOPLIN_VERSION}
 
-if [ "$JOPLIN_VERSION" = "dynamic" ]; then
-  echo "Checking for Joplin updates..."
+echo "[info] Installed Joplin Terminal App version: v${current:-unknown}"
+echo "[info] Checking for latest release from npm registry..."
 
-  current=$(NPM_CONFIG_PREFIX=/app/joplin npm list -g joplin --depth=0 2>/dev/null \
-    | grep -E 'joplin@[0-9.]*\s*$' \
-    | tail -n 1 \
-    | sed 's/^.*joplin@\([0-9.]*\).*$/\1/')
+latest=$(curl -s --max-time 5 https://registry.npmjs.org/joplin/latest | jq -r '.version // empty' 2>/dev/null)
 
-  latest=$(npm show joplin@latest version 2>/dev/null)
-
-  echo "Current Joplin version: $current"
-  echo "Latest Joplin version: $latest"
-
+if [ -n "$latest" ] && [ -n "$current" ]; then
   if [ "$current" != "$latest" ]; then
-    echo "Installing joplin@$latest..."
-    NPM_CONFIG_PREFIX=/app/joplin npm install --omit=dev -g joplin@$latest
+    echo "--------------------------------------------------"
+    echo " [NOTICE] A new Joplin version (v$latest) is available!"
+    echo " Current running version: v$current"
+    echo ""
+    echo " To upgrade:"
+    echo "   1. Update 'JOPLIN_VERSION=$latest' in your .env file"
+    echo "   2. Rebuild the container: docker compose up -d --build"
+    echo "--------------------------------------------------"
   else
-    echo "Joplin is already up to date."
+    echo "[info] Joplin Terminal App is currently up to date (v$current)."
   fi
-
-  ln -sf /app/joplin/bin/joplin /usr/bin/joplin
 fi
 
 SETTINGS_FILE="/root/.config/joplin/settings.json"
@@ -36,7 +40,7 @@ if [ ! -f "$SETTINGS_FILE" ]; then
   echo "{}" > "$SETTINGS_FILE"
 fi
 
-echo "Updating Joplin settings from environment variables (Fast jq Batch Update)..."
+echo "[config] Applying environment variables to settings.json..."
 
 ENV_JSON="{}"
 for var in $(env | grep '^JOPLIN_' | grep -v '^JOPLIN_VERSION='); do
@@ -53,13 +57,14 @@ done
 
 UPDATED_SETTINGS=$(jq --argjson env "$ENV_JSON" '. * $env' "$SETTINGS_FILE")
 echo "$UPDATED_SETTINGS" > "$SETTINGS_FILE"
-echo "Joplin settings updated successfully."
-echo "Starting Joplin server..."
+echo "[config] Settings updated successfully."
+
+echo "[service] Launching Joplin Web Clipper server..."
 joplin server start &
 
 sleep 5
 
-echo "Starting socat port forwarding (0.0.0.0:41185 -> 127.0.0.1:41184)..."
+echo "[network] Starting socat port proxy (0.0.0.0:41185 -> 127.0.0.1:41184)..."
 socat TCP-LISTEN:41185,fork,reuseaddr TCP:127.0.0.1:41184 &
 
 while true; do
@@ -69,9 +74,9 @@ while true; do
     | sed -E 's/.*:[[:space:]]*[0-9]+\/([0-9]+).*/\1/')
 
   if [ -z "$total_items" ] || [ "$total_items" -eq 0 ] 2>/dev/null; then
-    echo "Joplin is in a blank state, synchronization is paused"
+    echo "[sync] Local database is empty. Synchronization paused until initialized."
   else
-    echo "Starting Joplin sync (Total items: $total_items)..."
+    echo "[sync] Starting remote synchronization (Item count: $total_items)..."
     joplin sync
   fi
 

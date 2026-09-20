@@ -7,7 +7,7 @@ RUN NPM_CONFIG_PREFIX=/app/joplin npm install --omit=dev --no-audit --no-fund -g
 
 FROM alpine:3.23
 COPY --from=build /app/joplin /app/joplin
-RUN apk add --no-cache nodejs socat jq \
+RUN apk add --no-cache nodejs socat jq curl \
     && ln -s /app/joplin/bin/joplin /usr/bin/joplin
 
 EXPOSE 41184 41185

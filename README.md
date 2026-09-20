@@ -1,12 +1,12 @@
 # Joplin Terminal REST API (Docker)
 
-리눅스용 Joplin Terminal(CLI)을 기반으로 외부에서 접속 가능한 **Joplin REST API(Web Clipper API)** 서비스를 제공하는 경량 Docker 이미지입니다.
+리눅스용 Joplin Terminal App을 기반으로 외부에서 접속 가능한 **Joplin REST API(Web Clipper API)** 서비스를 제공하는 경량 Docker 이미지입니다.
 
 ---
 
 ## 📌 배경 및 프로젝트 목적
 
-Joplin Terminal에는 자체 Web Clipper 및 REST API를 구동할 수 있는 기능(`joplin server start`)이 내장되어 있습니다.  
+Joplin Terminal App에는 자체 Web Clipper 및 REST API를 구동할 수 있는 기능(`joplin server start`)이 내장되어 있습니다.  
 그러나 내장 서버의 바인딩 주소가 **`127.0.0.1:41184`로 하드코딩**되어 있어, 컨테이너 외부나 다른 호스트에서 직접 접근할 수 없는 제약이 있습니다.
 
 이 프로젝트는 다음 방식을 통해 이 문제를 깔끔하게 해결합니다:
@@ -64,7 +64,7 @@ cp .env-example .env
 `.env` 파일을 열어 본인의 Joplin 동기화 환경에 맞게 수정합니다.
 
 ```ini
-# 원하는 Joplin 버전 (기본값: 3.7.1, 또는 최신 유지를 위해 dynamic 가능)
+# 원하는 Joplin 버전 (기본값: 3.7.1)
 JOPLIN_VERSION=3.7.1
 
 # 로케일 및 시간 포맷
@@ -113,7 +113,7 @@ Joplin REST API를 호출하려면 보안 토큰(`api.token`)이 필요합니다
 컨테이너가 실행된 후 아래 명령어로 토큰을 확인합니다:
 
 ```bash
-docker exec -it joplin-terminal-api joplin server status
+cat joplin-data/settings.json
 ```
 
 또는 볼륨 파일에서 직접 확인:
@@ -124,8 +124,7 @@ jq -r '."api.token"' ./joplin-data/settings.json
 
 출력 예시:
 ```text
-Port: 41184
-Token: a1b2c3d4e5f6... (64자리 토큰)
+a1b2c3d4e5f6... (64자리 토큰)
 ```
 
 ### 2. API 호출 테스트
@@ -170,8 +169,22 @@ ports:
   - "9967:9967"  # OneDrive OAuth 인증용 포트
 ```
 
-### Joplin CLI 버전 자동 업데이트 (`dynamic`)
-`.env` 파일에 `JOPLIN_VERSION=dynamic`으로 설정하면, 컨테이너가 시작될 때마다 npm의 최신 Joplin CLI 버전을 체크하여 자동으로 업데이트합니다.
+### Joplin Terminal App 버전 확인 및 업데이트 안내
+컨테이너가 시작될 때 최신 Joplin Terminal App 버전을 자동으로 확인합니다.  
+새로운 버전이 있을 경우 컨테이너 로그에 다음과 같은 알림이 출력됩니다:
+
+```text
+--------------------------------------------------
+ [NOTICE] A new Joplin version (vx.y.z) is available!
+ Current running version: va.b.c
+
+ To upgrade:
+   1. Update 'JOPLIN_VERSION=x.y.z' in your .env file
+   2. Rebuild the container: docker compose up -d --build
+--------------------------------------------------
+```
+
+알림이 뜨면 안내에 따라 `.env` 파일의 `JOPLIN_VERSION` 값을 새 버전으로 수정한 후, `docker compose up -d --build`를 실행하여 새 버전으로 컨테이너를 다시 빌드하시면 됩니다.
 
 ---
 

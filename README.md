@@ -1,79 +1,82 @@
+[ English ] | [ 한국어 ](README.ko.md)
+
 # Joplin Terminal REST API (Docker)
 
-리눅스용 Joplin Terminal App을 기반으로 외부에서 접속 가능한 **Joplin REST API(Web Clipper API)** 서비스를 제공하는 경량 Docker 이미지입니다.
+A lightweight Docker image providing an externally accessible **Joplin REST API (Web Clipper API)** service powered by the official Joplin Terminal App on Linux.
 
 ---
 
-## 📌 배경 및 프로젝트 목적
+## 📌 Background & Motivation
 
-Joplin Terminal App에는 자체 Web Clipper 및 REST API를 구동할 수 있는 기능(`joplin server start`)이 내장되어 있습니다.  
-그러나 내장 서버의 바인딩 주소가 **`127.0.0.1:41184`로 하드코딩**되어 있어, 컨테이너 외부나 다른 호스트에서 직접 접근할 수 없는 제약이 있습니다.
+The Joplin Terminal App comes with a built-in Web Clipper and REST API server (`joplin server start`).  
+However, the internal server's listening host is **hardcoded to `127.0.0.1:41184`**, making it impossible to access directly from outside the container or other network hosts.
 
-이 프로젝트는 다음 방식을 통해 이 문제를 깔끔하게 해결합니다:
-1. **Alpine Linux 기반 경량화**: 불필요한 파일과 캐시를 제거한 초경량 컨테이너 환경 구축
-2. **`socat`을 통한 포트 포워딩**: 외부의 `0.0.0.0:41185` 요청을 컨테이너 내부 `127.0.0.1:41184`로 중계하여 외부 접근 허용
-3. **환경 변수 자동 설정**: `.env`에 정의된 `JOPLIN_*` 환경 변수를 `settings.json`으로 자동 반영
-4. **백그라운드 동기화**: 정기적인 백그라운드 동기화(`joplin sync`) 데몬 자동 실행
+This project cleanly overcomes this limitation by providing:
+1. **Lightweight Alpine Base**: An ultra-compact multi-stage build removing unnecessary npm caches, typings, and build artifacts.
+2. **Port Proxying via `socat`**: Seamlessly forwards external traffic from `0.0.0.0:41185` to local `127.0.0.1:41184`.
+3. **Automated Configuration via `.env`**: Automatically transforms `JOPLIN_*` environment variables into `settings.json` upon startup.
+4. **Automated Background Sync**: Runs an automatic background sync daemon (`joplin sync`) on configurable intervals.
 
 ---
 
-## 🏗️ 아키텍처 구조
+## 🏗️ Architecture
 
 ```text
-[ 외부 클라이언트 / 웹앱 / 자동화 봇 ]
+[ External Clients / Web Apps / Automation Bots ]
                      │
-                     ▼ HTTP Request (포트 41185)
+                     ▼ HTTP Request (Port 41185)
 ┌────────────────────────────────────────────────────────┐
 │ Docker Container (joplin-terminal-api)                 │
 │                                                        │
 │   socat (0.0.0.0:41185)                                │
 │     │                                                  │
-│     ▼ (내부 루프백 전달)                                 │
+│     ▼ (Internal Loopback Forwarding)                   │
 │   Joplin Web Clipper Server (127.0.0.1:41184)          │
 │     │                                                  │
 │     ▼                                                  │
 │   Joplin Data (/root/.config/joplin)                   │
 │     │                                                  │
-│   Sync Daemon (백그라운드 joplin sync)                   │
+│   Sync Daemon (Background joplin sync)                 │
 └────────────────────────────────────────────────────────┘
                      │
-                     ▼ (설정한 동기화 주기마다)
+                     ▼ (At defined sync intervals)
 [ Joplin Server / Nextcloud / WebDAV / OneDrive / Dropbox / S3 ]
 ```
 
 ---
 
-## 🚀 빠른 시작 (설치 방법)
+## 🚀 Quick Start (Installation)
 
-### 1. 사전 요구사항
-- [Docker](https://docs.docker.com/get-docker/) 및 [Docker Compose](https://docs.docker.com/compose/) 설치
+### 1. Prerequisites
+- [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/) installed
 
-### 2. 저장소 클론 및 환경 설정
+### 2. Clone Repository & Set Up Environment
 
 ```bash
-# 저장소 복제 (또는 작업 디렉토리 생성)
+# Clone repository
 git clone https://github.com/bonik21/joplin-terminal-api.git
 cd joplin-terminal-api
 
-# 환경 설정 파일 복사
+# Copy environment configuration template
 cp .env-example .env
+# (For Korean template, copy: cp .env-example.ko .env)
 ```
 
-### 3. `.env` 파일 편집
+### 3. Configure `.env` File
 
-`.env` 파일을 열어 본인의 Joplin 동기화 환경에 맞게 수정합니다.
+Edit the `.env` file to match your Joplin synchronization setup:
 
 ```ini
-# 원하는 Joplin 버전 (기본값: 3.7.1)
+# Desired Joplin version (Default: 3.7.1)
 JOPLIN_VERSION=3.7.1
 
-# 로케일 및 시간 포맷
+# Locale and Date/Time format
 JOPLIN_locale=en_GB
-JOPLIN_dateFormat=YYYY-MM-DD
+JOPLIN_dateFormat=DD/MM/YYYY
 JOPLIN_timeFormat=HH:mm
 
 # ==============================================================================
-# Joplin Sync Target (동기화 대상)
+# Joplin Sync Target Options
 # 0: None, 2: File system, 3: OneDrive, 5: Nextcloud, 6: WebDAV,
 # 7: Dropbox, 8: S3, 9: Joplin Server, 10: Joplin Cloud, 11: Joplin Server (SAML)
 # ==============================================================================
@@ -82,118 +85,116 @@ JOPLIN_sync_9_path=https://your-joplin-server.com
 JOPLIN_sync_9_username=your_username
 JOPLIN_sync_9_password=your_password
 
-# 동기화 주기 (초 단위, 기본 최소 300초)
+# Sync interval in seconds (Default minimum: 300)
 JOPLIN_sync_interval=300
 ```
 
-> **Tip (환경 변수 작성 규칙 및 주의사항):**  
-> - config에서 지정 가능한 전체 옵션은 [Joplin Terminal 공식 문서](https://joplinapp.org/help/apps/terminal/#commands)의 config 부분을 참고하세요.  
-> - `JOPLIN_` 뒤에 오는 언더스코어(`_`)는 `settings.json`의 점(`.`)으로 자동 치환되며, **카멜케이스(대소문자)는 반드시 유지**해야 합니다.  
->   - 예: `JOPLIN_dateFormat=YYYY-MM-DD` ➔ `"dateFormat": "YYYY-MM-DD"`  
->   - 예: `JOPLIN_sync_target=9` ➔ `"sync.target": 9`  
->   - 예: `JOPLIN_sync_9_path=...` ➔ `"sync.9.path": "..."`  
-> - **한국어 로케일 주의**: `ko_KR`이 아닌 `ko`로 설정해야 정상 인식됩니다. (예: `JOPLIN_locale=ko`)
+> **Tip (Configuration Rules & Notes):**  
+> - For all available configuration options, refer to the [official Joplin Terminal documentation](https://joplinapp.org/help/apps/terminal/#commands).  
+> - Any variable prefixing `JOPLIN_` will replace underscores (`_`) with dots (`.`) in `settings.json`. **CamelCase must be preserved**:  
+>   - E.g. `JOPLIN_dateFormat=YYYY-MM-DD` ➔ `"dateFormat": "YYYY-MM-DD"`  
+>   - E.g. `JOPLIN_sync_target=9` ➔ `"sync.target": 9`  
+>   - E.g. `JOPLIN_sync_9_path=...` ➔ `"sync.9.path": "..."`  
+> - **Korean Locale Note**: Use `ko` instead of `ko_KR` (e.g. `JOPLIN_locale=ko`).
 
-### 4. 컨테이너 빌드 및 실행
+### 4. Build & Run the Container
 
 ```bash
 docker compose up -d --build
 ```
 
-실행 상태 및 로그를 확인합니다:
+View startup logs:
 ```bash
 docker compose logs -f
 ```
 
-### 5. 최초 1회 수동 동기화 실행 (필수)
+### 5. Initial Manual Synchronization (Required)
 
-컨테이너 최초 실행 시에는 로컬 데이터베이스에 아이템이 전혀 없는 상태(`total: 0`)입니다. 잘못된 덮어쓰기나 예기치 않은 데이터 유실을 방지하기 위해 컨테이너 내부의 자동 동기화 루프는 일시정지(`[sync] Local database is empty. Synchronization paused...`) 상태로 대기합니다.
+Upon first run, the local database contains no items (`total: 0`). To prevent unexpected data loss or overwriting, the automatic background synchronization loop enters a paused state (`[sync] Local database is empty. Synchronization paused...`).
 
-따라서 최초 1회는 사용자가 직접 설정 및 상태를 확인한 후 수동으로 동기화를 시작해주어야 합니다.
+Therefore, you must check the configuration and trigger an initial sync manually:
 
 ```bash
-# 1) 현재 Joplin 설정값 확인
+# 1) Verify Joplin configurations
 docker compose exec joplin-terminal-api joplin config
 
-# 2) 동기화 상태 확인
+# 2) Check synchronization status
 docker compose exec joplin-terminal-api joplin status
 
-# 3) 최초 수동 동기화 실행
+# 3) Trigger initial synchronization
 docker compose exec joplin-terminal-api joplin sync
 ```
 
-최초 동기화가 성공하여 로컬 데이터가 채워지면(`Item count > 0`), 이후부터는 백그라운드 데몬이 설정된 동기화 주기(`JOPLIN_sync_interval`)에 맞춰 자동으로 동기화를 지속합니다.
+Once the initial synchronization finishes and items exist locally (`Item count > 0`), the background daemon will automatically keep synchronizing at your configured interval (`JOPLIN_sync_interval`).
 
 ---
 
-## 🔑 API 토큰 확인 및 사용법
+## 🔑 Retrieving the API Token & Usage
 
-Joplin REST API를 호출하려면 보안 토큰(`api.token`)이 필요합니다.
+Accessing the Joplin REST API requires an authentication token (`api.token`).
 
-### 1. API 토큰 확인하기
+### 1. Retrieve the API Token
 
-컨테이너가 실행된 후 아래 명령어로 토큰을 확인합니다:
+Once the container is started, retrieve your token using:
 
 ```bash
 cat joplin-data/settings.json
 ```
 
-또는 볼륨 파일에서 직접 확인:
+Or extract it with `jq`:
 ```bash
-# jq가 설치되어 있는 경우
 jq -r '."api.token"' ./joplin-data/settings.json
 ```
 
-출력 예시:
+Example output:
 ```text
-a1b2c3d4e5f6... (64자리 토큰)
+a1b2c3d4e5f6... (64-character token)
 ```
 
-### 2. API 호출 테스트
+### 2. Test API Requests
 
-호스트 또는 외부에서 `41185` 포트로 요청을 전송합니다.
+Send HTTP requests to port `41185` on your host:
 
-#### 헬스체크 (`ping`)
+#### Health Check (`ping`)
 ```bash
 curl http://localhost:41185/ping
 ```
-*응답: `JoplinClipperServer`*
+*Response: `JoplinClipperServer`*
 
-#### 루트 폴더(노트북) 목록 조회
+#### List Folders (Notebooks)
 ```bash
 curl "http://localhost:41185/folders?token=<YOUR_API_TOKEN>"
 ```
 
-#### 노트 목록 조회
+#### List Notes
 ```bash
 curl "http://localhost:41185/notes?token=<YOUR_API_TOKEN>"
 ```
 
-#### 새 노트 생성
+#### Create a New Note
 ```bash
 curl -X POST "http://localhost:41185/notes?token=<YOUR_API_TOKEN>" \
   -H "Content-Type: application/json" \
-  -d '{"title": "Docker API 테스트", "body": "Joplin Terminal API가 정상 동작합니다!"}'
+  -d '{"title": "Docker API Test", "body": "Joplin Terminal API is working properly!"}'
 ```
 
-자세한 API 명세는 [Joplin Data API 공식 문서](https://joplinapp.org/help/api/references/rest_api)를 참고하세요.
+For full API specifications, see the [Joplin Data API Official Documentation](https://joplinapp.org/help/api/references/rest_api).
 
 ---
 
-## ⚙️ 추가 설정 안내
+## ⚙️ Additional Configuration
 
-### OneDrive 동기화 사용 시
-OneDrive를 동기화 대상으로 사용하는 경우, 최초 로그인 OAuth 인증 리디렉션을 위해 `docker-compose.yml`에서 `9967` 포트의 주석을 해제해야 합니다:
+### When Using OneDrive Sync
+If you use OneDrive as your sync target, you need to expose port `9967` in `docker-compose.yml` for OAuth redirect during initial authorization:
 
 ```yaml
 ports:
   - "41185:41185"
-  - "9967:9967"  # OneDrive OAuth 인증용 포트
+  - "9967:9967"  # Port for OneDrive OAuth redirection
 ```
 
-### Joplin Terminal App 버전 확인 및 업데이트 안내
-컨테이너가 시작될 때 최신 Joplin Terminal App 버전을 자동으로 확인합니다.  
-새로운 버전이 있을 경우 컨테이너 로그에 다음과 같은 알림이 출력됩니다:
+### Version Notification & Upgrade Guide
+The container checks for the latest Joplin release upon startup. If a newer release is found, a notice is displayed in the container logs:
 
 ```text
 --------------------------------------------------
@@ -206,20 +207,20 @@ ports:
 --------------------------------------------------
 ```
 
-알림이 뜨면 안내에 따라 `.env` 파일의 `JOPLIN_VERSION` 값을 새 버전으로 수정한 후, `docker compose up -d --build`를 실행하여 새 버전으로 컨테이너를 다시 빌드하시면 됩니다.
+When notified, simply update `JOPLIN_VERSION` in your `.env` file and rebuild the container with `docker compose up -d --build`.
 
 ---
 
-## 📂 볼륨 영속성
+## 📂 Volume Persistence
 
-- `./joplin-data`: 컨테이너 내부의 `/root/.config/joplin` 경로에 마운트됩니다.
-  - SQLite 데이터베이스 (`database.sqlite`)
-  - 설정 파일 (`settings.json`)
-  - 리소스/첨부파일 (`resources/`)
-- 컨테이너가 재생성되거나 업데이트되어도 데이터는 호스트에 안전하게 보존됩니다.
+- `./joplin-data`: Mounted to `/root/.config/joplin` inside the container.
+  - SQLite database (`database.sqlite`)
+  - Settings file (`settings.json`)
+  - Resource attachments (`resources/`)
+- All data remains safely stored on the host across container recreations and upgrades.
 
 ---
 
-## 📄 라이선스
+## 📄 License
 
-이 프로젝트는 MIT 라이선스를 따릅니다. Joplin 자체의 라이선스는 [Joplin 공식 리포지토리](https://github.com/laurent22/joplin)를 참조하세요.
+This project is licensed under the MIT License. For Joplin's own license, please visit the [official Joplin repository](https://github.com/laurent22/joplin).

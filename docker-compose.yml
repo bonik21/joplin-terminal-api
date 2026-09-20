@@ -1,0 +1,18 @@
+services:
+  joplin-api:
+    build:
+      context: .
+      args:
+        JOPLIN_VERSION: ${JOPLIN_VERSION:-3.7.1}
+    image: joplin-cli-api:${JOPLIN_VERSION:-3.7.1}
+    container_name: joplin-api
+    restart: unless-stopped
+    ports:
+      - "41185:41185"
+      # [Optional] Uncomment if you use OneDrive as sync target (OAuth redirect port)
+      # - "9967:9967"
+    env_file:
+      - .env
+    volumes:
+      - ./joplin-data:/root/.config/joplin
+      - ./entrypoint.sh:/usr/bin/entrypoint.sh:ro

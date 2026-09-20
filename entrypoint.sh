@@ -7,10 +7,15 @@ echo "=================================================="
 echo "[init] Clearing residual temporary files..."
 rm -rf /tmp/* 2>&1
 
-current=$(joplin version 2>/dev/null | head -n 1 | sed -E 's/.*([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
-if [ -z "$current" ] && [ -f "/app/joplin/lib/node_modules/joplin/package.json" ]; then
+current=""
+if [ -f "/app/joplin/lib/node_modules/joplin/package.json" ]; then
   current=$(jq -r '.version // empty' /app/joplin/lib/node_modules/joplin/package.json 2>/dev/null)
 fi
+
+if [ -z "$current" ]; then
+  current=$(joplin version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1)
+fi
+
 current=${current:-$JOPLIN_VERSION}
 
 echo "[info] Installed Joplin Terminal App version: v${current:-unknown}"

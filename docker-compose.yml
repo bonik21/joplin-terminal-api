@@ -1,11 +1,11 @@
 services:
-  joplin-api:
+  joplin-terminal-api:
     build:
       context: .
       args:
         JOPLIN_VERSION: ${JOPLIN_VERSION:-3.7.1}
-    image: joplin-cli-api:${JOPLIN_VERSION:-3.7.1}
-    container_name: joplin-api
+    image: joplin-terminal-api:${JOPLIN_VERSION:-3.7.1}
+    container_name: joplin-terminal-api
     restart: unless-stopped
     ports:
       - "41185:41185"

@@ -23,19 +23,19 @@ Joplin Terminal에는 자체 Web Clipper 및 REST API를 구동할 수 있는 �
 [ 외부 클라이언트 / 웹앱 / 자동화 봇 ]
                      │
                      ▼ HTTP Request (포트 41185)
-┌───────────────────────────────────────────────┐
-│ Docker Container (joplin-api)                 │
-│                                               │
-│   socat (0.0.0.0:41185)                       │
-│     │                                         │
-│     ▼ (내부 루프백 전달)                        │
-│   Joplin Web Clipper Server (127.0.0.1:41184) │
-│     │                                         │
-│     ▼                                         │
-│   Joplin Data (/root/.config/joplin)          │
-│     │                                         │
-│   Sync Daemon (백그라운드 joplin sync)          │
-└───────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│ Docker Container (joplin-terminal-api)                 │
+│                                                        │
+│   socat (0.0.0.0:41185)                                │
+│     │                                                  │
+│     ▼ (내부 루프백 전달)                                 │
+│   Joplin Web Clipper Server (127.0.0.1:41184)          │
+│     │                                                  │
+│     ▼                                                  │
+│   Joplin Data (/root/.config/joplin)                   │
+│     │                                                  │
+│   Sync Daemon (백그라운드 joplin sync)                   │
+└────────────────────────────────────────────────────────┘
                      │
                      ▼ (설정한 동기화 주기마다)
 [ Joplin Server / Nextcloud / WebDAV / OneDrive / Dropbox / S3 ]
@@ -113,7 +113,7 @@ Joplin REST API를 호출하려면 보안 토큰(`api.token`)이 필요합니다
 컨테이너가 실행된 후 아래 명령어로 토큰을 확인합니다:
 
 ```bash
-docker exec -it joplin-api joplin server status
+docker exec -it joplin-terminal-api joplin server status
 ```
 
 또는 볼륨 파일에서 직접 확인:

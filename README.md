@@ -86,10 +86,13 @@ JOPLIN_sync_9_password=your_password
 JOPLIN_sync_interval=300
 ```
 
-> **Tip (환경 변수 매핑 규칙):**  
-> `JOPLIN_` 뒤에 오는 언더스코어(`_`)는 `settings.json`의 점(`.`)으로 자동 치환됩니다.  
-> 예: `JOPLIN_sync_target=9` ➔ `"sync.target": 9`  
-> 예: `JOPLIN_sync_9_path=...` ➔ `"sync.9.path": "..."`
+> **Tip (환경 변수 작성 규칙 및 주의사항):**  
+> - config에서 지정 가능한 전체 옵션은 [Joplin Terminal 공식 문서](https://joplinapp.org/help/apps/terminal/#commands)의 config 부분을 참고하세요.  
+> - `JOPLIN_` 뒤에 오는 언더스코어(`_`)는 `settings.json`의 점(`.`)으로 자동 치환되며, **카멜케이스(대소문자)는 반드시 유지**해야 합니다.  
+>   - 예: `JOPLIN_dateFormat=YYYY-MM-DD` ➔ `"dateFormat": "YYYY-MM-DD"`  
+>   - 예: `JOPLIN_sync_target=9` ➔ `"sync.target": 9`  
+>   - 예: `JOPLIN_sync_9_path=...` ➔ `"sync.9.path": "..."`  
+> - **한국어 로케일 주의**: `ko_KR`이 아닌 `ko`로 설정해야 정상 인식됩니다. (예: `JOPLIN_locale=ko`)
 
 ### 4. 컨테이너 빌드 및 실행
 

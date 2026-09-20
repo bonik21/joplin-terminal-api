@@ -75,7 +75,7 @@ JOPLIN_timeFormat=HH:mm
 # ==============================================================================
 # Joplin Sync Target (동기화 대상)
 # 0: None, 2: File system, 3: OneDrive, 5: Nextcloud, 6: WebDAV,
-# 7: Dropbox, 8: S3, 9: Joplin Server, 10: Joplin Cloud
+# 7: Dropbox, 8: S3, 9: Joplin Server, 10: Joplin Cloud, 11: Joplin Server (SAML)
 # ==============================================================================
 JOPLIN_sync_target=9
 JOPLIN_sync_9_path=https://your-joplin-server.com
@@ -104,6 +104,25 @@ docker compose up -d --build
 ```bash
 docker compose logs -f
 ```
+
+### 5. 최초 1회 수동 동기화 실행 (필수)
+
+컨테이너 최초 실행 시에는 로컬 데이터베이스에 아이템이 전혀 없는 상태(`total: 0`)입니다. 잘못된 덮어쓰기나 예기치 않은 데이터 유실을 방지하기 위해 컨테이너 내부의 자동 동기화 루프는 일시정지(`[sync] Local database is empty. Synchronization paused...`) 상태로 대기합니다.
+
+따라서 최초 1회는 사용자가 직접 설정 및 상태를 확인한 후 수동으로 동기화를 시작해주어야 합니다.
+
+```bash
+# 1) 현재 Joplin 설정값 확인
+docker compose exec joplin-terminal-api joplin config
+
+# 2) 동기화 상태 확인
+docker compose exec joplin-terminal-api joplin status
+
+# 3) 최초 수동 동기화 실행
+docker compose exec joplin-terminal-api joplin sync
+```
+
+최초 동기화가 성공하여 로컬 데이터가 채워지면(`Item count > 0`), 이후부터는 백그라운드 데몬이 설정된 동기화 주기(`JOPLIN_sync_interval`)에 맞춰 자동으로 동기화를 지속합니다.
 
 ---
 

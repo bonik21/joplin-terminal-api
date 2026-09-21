@@ -264,3 +264,9 @@ When notified, simply update `JOPLIN_VERSION` in your `.env` file and rebuild th
 ## 📄 License
 
 This project is licensed under the MIT License. For Joplin's own license, please visit the [official Joplin repository](https://github.com/laurent22/joplin).
+
+---
+
+- **Author**: BoniK ([mail@bonik.me](mailto:mail@bonik.me) / [https://bonik.me](https://bonik.me))
+- **Support**: [Buy me a coffee](https://buymeacoffee.com/bonik)
+

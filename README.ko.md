@@ -263,3 +263,9 @@ curl -X POST http://127.0.0.1:41185/notes \
 ## 📄 라이선스
 
 이 프로젝트는 MIT 라이선스를 따릅니다. Joplin 자체의 라이선스는 [Joplin 공식 리포지토리](https://github.com/laurent22/joplin)를 참조하세요.
+
+---
+
+- **Author**: BoniK ([mail@bonik.me](mailto:mail@bonik.me) / [https://bonik.me](https://bonik.me))
+- **Support**: [Buy me a coffee](https://buymeacoffee.com/bonik)
+

@@ -16,3 +16,4 @@ services:
     volumes:
       - ./joplin-data:/root/.config/joplin
       - ./entrypoint.sh:/usr/bin/entrypoint.sh:ro
+      - ./gateway.sh:/usr/local/bin/gateway.sh:ro

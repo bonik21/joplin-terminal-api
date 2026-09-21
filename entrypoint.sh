@@ -69,8 +69,8 @@ joplin server start &
 
 sleep 5
 
-echo "[network] Starting socat port proxy (0.0.0.0:41185 -> 127.0.0.1:41184)..."
-socat TCP-LISTEN:41185,fork,reuseaddr TCP:127.0.0.1:41184 &
+echo "[network] Starting socat HTTP gateway on 0.0.0.0:41185..."
+socat TCP-LISTEN:41185,fork,reuseaddr EXEC:/usr/local/bin/gateway.sh &
 
 while true; do
   total_items=$(joplin status 2>/dev/null \
@@ -82,7 +82,15 @@ while true; do
     echo "[sync] Local database is empty. Synchronization paused until initialized."
   else
     echo "[sync] Starting remote synchronization (Item count: $total_items)..."
-    joplin sync
+    sync_status=0
+    /usr/local/bin/gateway.sh --sync || sync_status=$?
+    if [ $sync_status -eq 2 ]; then
+      echo "[sync] Synchronization already in progress by another task. Skipping this cycle."
+    elif [ $sync_status -eq 0 ]; then
+      echo "[sync] Synchronization completed successfully."
+    else
+      echo "[sync] Synchronization failed (exit code $sync_status)."
+    fi
   fi
 
   sync_interval=600

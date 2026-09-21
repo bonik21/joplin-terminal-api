@@ -10,5 +10,9 @@ COPY --from=build /app/joplin /app/joplin
 RUN apk add --no-cache nodejs socat jq curl \
     && ln -s /app/joplin/bin/joplin /usr/bin/joplin
 
-EXPOSE 41184 41185
+COPY entrypoint.sh /usr/bin/entrypoint.sh
+COPY gateway.sh /usr/local/bin/gateway.sh
+RUN chmod +x /usr/bin/entrypoint.sh /usr/local/bin/gateway.sh
+
+EXPOSE 41185
 ENTRYPOINT ["sh", "/usr/bin/entrypoint.sh"]

@@ -2,44 +2,58 @@
 
 # Joplin Terminal REST API (Docker)
 
-리눅스용 Joplin Terminal App을 기반으로 외부에서 접속 가능한 **Joplin REST API(Web Clipper API)** 서비스를 제공하는 경량 Docker 이미지입니다.
+리눅스용 Joplin Terminal App을 기반으로 외부에서 접속 가능한 **Joplin REST API(Web Clipper API)** 서비스 및 HTTP Gateway를 제공하는 경량 Docker 이미지입니다.
 
 ---
 
 ## 📌 배경 및 프로젝트 목적
 
 Joplin Terminal App에는 자체 Web Clipper 및 REST API를 구동할 수 있는 기능(`joplin server start`)이 내장되어 있습니다.  
-그러나 내장 서버의 바인딩 주소가 **`127.0.0.1:41184`로 하드코딩**되어 있어, 컨테이너 외부나 다른 호스트에서 직접 접근할 수 없는 제약이 있습니다.
+그러나 내장 서버의 바인딩 주소가 **`127.0.0.1:41184`로 하드코딩**되어 있어 컨테이너 외부나 다른 네트워크 호스트에서 직접 접근할 수 없는 제약이 있습니다. 또한 Joplin의 기본 Data API는 쿼리 파라미터(`?token=...`) 인증만 지원하며, 외부에서 즉시 원격 동기화(sync)를 호출할 수 있는 엔드포인트를 제공하지 않습니다.
 
-이 프로젝트는 다음 방식을 통해 이 문제를 깔끔하게 해결합니다:
-1. **Alpine Linux 기반 경량화**: 불필요한 파일과 캐시를 제거한 초경량 컨테이너 환경 구축
-2. **`socat`을 통한 포트 포워딩**: 외부의 `0.0.0.0:41185` 요청을 컨테이너 내부 `127.0.0.1:41184`로 중계하여 외부 접근 허용
-3. **환경 변수 자동 설정**: `.env`에 정의된 `JOPLIN_*` 환경 변수를 `settings.json`으로 자동 반영
-4. **백그라운드 동기화**: 정기적인 백그라운드 동기화(`joplin sync`) 데몬 자동 실행
+이 프로젝트는 다음 방식을 통해 이러한 한계를 깔끔하게 해결합니다:
+1. **Alpine Linux 기반 경량화**: 불필요한 npm 캐시, 타입 정의, 빌드 부산물을 제거한 초경량 멀티스테이지 컨테이너 환경 구축
+2. **HTTP 게이트웨이 (`socat` + `gateway.sh`)**: 외부 `0.0.0.0:41185` 요청을 수신하여 표준 `Authorization: Bearer <token>` 헤더를 검증하고, 내부 루프백 `127.0.0.1:41184` Data API로 안전하게 중계
+3. **온디맨드 동기화 API (`POST /sync`)**: 외부 자동화 봇, 웹훅 등에서 컨테이너 셸에 직접 들어가지 않고도 원격 동기화를 즉시 트리거 가능
+4. **동시 동기화 방지(Sync Lock)**: 백그라운드 주기적 동기화와 API 트리거 동기화가 동일한 단일 파일 락(`flock`)을 공유하여 충돌을 방지하며, 이미 동기화 진행 중일 경우 `409 Conflict` 응답 반환
+5. **환경 변수 자동 설정**: `.env`에 정의된 `JOPLIN_*` 환경 변수를 `settings.json`으로 자동 반영
+6. **백그라운드 자동 동기화**: 설정된 주기마다 백그라운드 동기화 데몬(`joplin sync`) 자동 실행
 
 ---
 
 ## 🏗️ 아키텍처 구조
 
 ```text
-[ 외부 클라이언트 / 웹앱 / 자동화 봇 ]
-                     │
-                     ▼ HTTP Request (포트 41185)
-┌────────────────────────────────────────────────────────┐
-│ Docker Container (joplin-terminal-api)                 │
-│                                                        │
-│   socat (0.0.0.0:41185)                                │
-│     │                                                  │
-│     ▼ (내부 루프백 전달)                                 │
-│   Joplin Web Clipper Server (127.0.0.1:41184)          │
-│     │                                                  │
-│     ▼                                                  │
-│   Joplin Data (/root/.config/joplin)                   │
-│     │                                                  │
-│   Sync Daemon (백그라운드 joplin sync)                   │
-└────────────────────────────────────────────────────────┘
-                     │
-                     ▼ (설정한 동기화 주기마다)
+[ 외부 클라이언트 / 웹훅 / 웹앱 / 자동화 봇 ]
+                             │
+                             ▼ HTTP Request (포트 41185)
+┌────────────────────────────────────────────────────────────────────────┐
+│ Docker Container (joplin-terminal-api)                                 │
+│                                                                        │
+│   socat + gateway.sh (0.0.0.0:41185)                                   │
+│     │                                                                  │
+│     ├─── POST /sync (Authorization: Bearer <token>)                    │
+│     │      │                                                           │
+│     │      ▼ (공유 Sync Lock 획득)                                      │
+│     │    joplin sync  ──► 200 OK (동시 실행 시 409 Conflict)            │
+│     │                                                                  │
+│     ├─── GET /ping (공개 헬스체크)                                      │
+│     │      │                                                           │
+│     │      ▼ (인증 없이 직접 중계)                                      │
+│     │    Joplin Web Clipper Server (127.0.0.1:41184/ping)              │
+│     │                                                                  │
+│     └─── 기타 Data API (/notes, /folders, /tags 등)                    │
+│            │ (Authorization: Bearer <token> ➔ ?token=<token> 변환)     │
+│            ▼                                                           │
+│          Joplin Web Clipper Server (127.0.0.1:41184)                   │
+│            │                                                           │
+│            ▼                                                           │
+│          Joplin Data (/root/.config/joplin)                            │
+│            │                                                           │
+│   Sync Daemon (공유 sync lock 기반 백그라운드 주기적 동기화)            │
+└────────────────────────────────────────────────────────────────────────┘
+                             │
+                             ▼ (설정한 동기화 주기 또는 API 호출 시)
 [ Joplin Server / Nextcloud / WebDAV / OneDrive / Dropbox / S3 ]
 ```
 
@@ -125,13 +139,13 @@ docker compose exec joplin-terminal-api joplin status
 docker compose exec joplin-terminal-api joplin sync
 ```
 
-최초 동기화가 성공하여 로컬 데이터가 채워지면(`Item count > 0`), 이후부터는 백그라운드 데몬이 설정된 동기화 주기(`JOPLIN_sync_interval`)에 맞춰 자동으로 동기화를 지속합니다.
+최초 동기화가 성공하여 로컬 데이터가 채워지면(`Item count > 0`), 이후부터는 백그라운드 데몬이 설정된 동기화 주기(`JOPLIN_sync_interval`)에 맞춰 자동으로 동기화를 지속합니다. 또한 필요할 때 언제든지 `POST /sync` API를 호출하여 동기화할 수 있습니다.
 
 ---
 
 ## 🔑 API 토큰 확인 및 사용법
 
-Joplin REST API를 호출하려면 보안 토큰(`api.token`)이 필요합니다.
+Joplin REST API 및 게이트웨이를 호출하려면 보안 토큰(`api.token`)이 필요합니다.
 
 ### 1. API 토큰 확인하기
 
@@ -141,7 +155,7 @@ Joplin REST API를 호출하려면 보안 토큰(`api.token`)이 필요합니다
 cat joplin-data/settings.json
 ```
 
-또는 볼륨 파일에서 직접 확인:
+또는 볼륨 파일에서 직접 추출:
 ```bash
 # jq가 설치되어 있는 경우
 jq -r '."api.token"' ./joplin-data/settings.json
@@ -152,47 +166,67 @@ jq -r '."api.token"' ./joplin-data/settings.json
 a1b2c3d4e5f6... (64자리 토큰)
 ```
 
+이 토큰을 HTTP 요청 시 `Authorization: Bearer <토큰>` 헤더로 전송합니다.
+
 ### 2. API 호출 테스트
 
-호스트 또는 외부에서 `41185` 포트로 요청을 전송합니다.
+호스트 또는 외부에서 `41185` 포트로 요청을 전송합니다:
 
-#### 헬스체크 (`ping`)
+#### 헬스체크 (`/ping`)
+공개 헬스체크 엔드포인트입니다. 별도의 인증 토큰이 필요하지 않습니다.
 ```bash
 curl http://localhost:41185/ping
 ```
-*응답: `JoplinClipperServer`*
+- **응답**: `200 OK` (`JoplinClipperServer`)
+
+#### 동기화 즉시 실행 (`POST /sync`)
+공유 락 제어 하에 `joplin sync`를 즉시 실행합니다.
+```bash
+curl -X POST http://localhost:41185/sync \
+  -H "Authorization: Bearer <YOUR_API_TOKEN>"
+```
+- **응답 코드 안내**:
+  - `200 OK`: `Sync completed` (동기화 정상 완료)
+  - `409 Conflict`: `Sync already running` (백그라운드 동기화 또는 다른 API 요청이 이미 동기화 중임)
+  - `401 Unauthorized`: `Unauthorized` (토큰 누락 또는 유효하지 않음)
+  - `405 Method Not Allowed`: `Method Not Allowed` (GET 등 비-POST 요청 시 거부)
+  - `500 Internal Server Error`: `Sync failed` (Joplin 동기화 도중 오류 발생)
 
 #### 루트 폴더(노트북) 목록 조회
 ```bash
-curl "http://localhost:41185/folders?token=<YOUR_API_TOKEN>"
+curl http://localhost:41185/folders \
+  -H "Authorization: Bearer <YOUR_API_TOKEN>"
 ```
 
-#### 노트 목록 조회
+#### 노트 목록 조회 (쿼리 파라미터 지원)
+기존 Data API의 쿼리 파라미터가 그대로 유지됩니다:
 ```bash
-curl "http://localhost:41185/notes?token=<YOUR_API_TOKEN>"
+curl "http://localhost:41185/notes?fields=id,title,updated_time&limit=10" \
+  -H "Authorization: Bearer <YOUR_API_TOKEN>"
 ```
 
 #### 새 노트 생성
 ```bash
-curl -X POST "http://localhost:41185/notes?token=<YOUR_API_TOKEN>" \
+curl -X POST http://localhost:41185/notes \
+  -H "Authorization: Bearer <YOUR_API_TOKEN>" \
   -H "Content-Type: application/json" \
-  -d '{"title": "Docker API 테스트", "body": "Joplin Terminal API가 정상 동작합니다!"}'
+  -d '{"title": "Docker API 테스트", "body": "Joplin Terminal API Gateway가 정상 동작합니다!"}'
 ```
 
 자세한 API 명세는 [Joplin Data API 공식 문서](https://joplinapp.org/help/api/references/rest_api)를 참고하세요.
 
 ---
 
-## ⚙️ 추가 설정 안내
+## ⚙️ 포트 및 보안 세부사항
 
-### OneDrive 동기화 사용 시
-OneDrive를 동기화 대상으로 사용하는 경우, 최초 로그인 OAuth 인증 리디렉션을 위해 `docker-compose.yml`에서 `9967` 포트의 주석을 해제해야 합니다:
-
-```yaml
-ports:
-  - "41185:41185"
-  - "9967:9967"  # OneDrive OAuth 인증용 포트
-```
+- **포트 `41185` (Gateway)**: 외부에 공개되는 유일한 게이트웨이 포트입니다. HTTP 요청을 수신하여 `Authorization: Bearer` 인증 검증 및 동기화 락 제어를 수행하고, 검증된 요청만 내부로 전달합니다.
+- **포트 `41184` (내부 루프백)**: Joplin Terminal 내부 Web Clipper 서버 포트(`127.0.0.1:41184`)로, 컨테이너 외부에는 일절 노출되지 않습니다.
+- **OneDrive 동기화 사용 시**: OneDrive를 동기화 대상으로 사용하는 경우, 최초 로그인 OAuth 인증 리디렉션을 위해 `docker-compose.yml`에서 `9967` 포트의 주석을 해제해야 합니다:
+  ```yaml
+  ports:
+    - "41185:41185"
+    - "9967:9967"  # OneDrive OAuth 인증용 포트
+  ```
 
 ### Joplin Terminal App 버전 확인 및 업데이트 안내
 컨테이너가 시작될 때 최신 Joplin Terminal App 버전을 자동으로 확인합니다.  

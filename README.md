@@ -2,44 +2,58 @@
 
 # Joplin Terminal REST API (Docker)
 
-A lightweight Docker image providing an externally accessible **Joplin REST API (Web Clipper API)** service powered by the official Joplin Terminal App on Linux.
+A lightweight Docker image providing an externally accessible **Joplin REST API (Web Clipper API)** service and HTTP Gateway powered by the official Joplin Terminal App on Linux.
 
 ---
 
 ## 📌 Background & Motivation
 
 The Joplin Terminal App comes with a built-in Web Clipper and REST API server (`joplin server start`).  
-However, the internal server's listening host is **hardcoded to `127.0.0.1:41184`**, making it impossible to access directly from outside the container or other network hosts.
+However, the internal server's listening host is **hardcoded to `127.0.0.1:41184`**, making it impossible to access directly from outside the container or other network hosts. Furthermore, Joplin's internal Data API requires passing the authentication token as a query parameter (`?token=...`) and does not natively expose an endpoint to trigger remote synchronization on demand.
 
-This project cleanly overcomes this limitation by providing:
+This project cleanly overcomes these limitations with:
 1. **Lightweight Alpine Base**: An ultra-compact multi-stage build removing unnecessary npm caches, typings, and build artifacts.
-2. **Port Proxying via `socat`**: Seamlessly forwards external traffic from `0.0.0.0:41185` to local `127.0.0.1:41184`.
-3. **Automated Configuration via `.env`**: Automatically transforms `JOPLIN_*` environment variables into `settings.json` upon startup.
-4. **Automated Background Sync**: Runs an automatic background sync daemon (`joplin sync`) on configurable intervals.
+2. **HTTP Gateway (`socat` + `gateway.sh`)**: Exposes external port `41185`, accepts standard `Authorization: Bearer <token>` headers, and securely bridges traffic to Joplin's internal `127.0.0.1:41184` Data API.
+3. **On-Demand Synchronization (`POST /sync`)**: Allows external automation tools and webhooks to trigger synchronization without accessing the container shell.
+4. **Mutual Exclusion Sync Lock**: Synchronizes background scheduled runs and on-demand API triggers via a shared file lock, preventing concurrent sync collisions and returning `409 Conflict` if a sync is already active.
+5. **Automated Configuration via `.env`**: Automatically transforms `JOPLIN_*` environment variables into `settings.json` upon startup.
+6. **Automated Background Sync**: Runs an automatic background sync daemon (`joplin sync`) on configurable intervals.
 
 ---
 
 ## 🏗️ Architecture
 
 ```text
-[ External Clients / Web Apps / Automation Bots ]
-                     │
-                     ▼ HTTP Request (Port 41185)
-┌────────────────────────────────────────────────────────┐
-│ Docker Container (joplin-terminal-api)                 │
-│                                                        │
-│   socat (0.0.0.0:41185)                                │
-│     │                                                  │
-│     ▼ (Internal Loopback Forwarding)                   │
-│   Joplin Web Clipper Server (127.0.0.1:41184)          │
-│     │                                                  │
-│     ▼                                                  │
-│   Joplin Data (/root/.config/joplin)                   │
-│     │                                                  │
-│   Sync Daemon (Background joplin sync)                 │
-└────────────────────────────────────────────────────────┘
-                     │
-                     ▼ (At defined sync intervals)
+[ External Clients / Webhooks / Web Apps / Automation Bots ]
+                             │
+                             ▼ HTTP Request (Port 41185)
+┌────────────────────────────────────────────────────────────────────────┐
+│ Docker Container (joplin-terminal-api)                                 │
+│                                                                        │
+│   socat + gateway.sh (0.0.0.0:41185)                                   │
+│     │                                                                  │
+│     ├─── POST /sync (Authorization: Bearer <token>)                    │
+│     │      │                                                           │
+│     │      ▼ (Acquires Shared Sync Lock)                               │
+│     │    joplin sync  ──► 200 OK (or 409 Conflict if already running)  │
+│     │                                                                  │
+│     ├─── GET /ping (Public Health Check)                               │
+│     │      │                                                           │
+│     │      ▼ (Forwards directly without auth)                          │
+│     │    Joplin Web Clipper Server (127.0.0.1:41184/ping)              │
+│     │                                                                  │
+│     └─── Data API (/notes, /folders, /tags, etc.)                      │
+│            │ (Authorization: Bearer <token> ➔ ?token=<token>)          │
+│            ▼                                                           │
+│          Joplin Web Clipper Server (127.0.0.1:41184)                   │
+│            │                                                           │
+│            ▼                                                           │
+│          Joplin Data (/root/.config/joplin)                            │
+│            │                                                           │
+│   Sync Daemon (Periodic background loop via shared sync lock)          │
+└────────────────────────────────────────────────────────────────────────┘
+                             │
+                             ▼ (At defined sync intervals or API trigger)
 [ Joplin Server / Nextcloud / WebDAV / OneDrive / Dropbox / S3 ]
 ```
 
@@ -125,13 +139,13 @@ docker compose exec joplin-terminal-api joplin status
 docker compose exec joplin-terminal-api joplin sync
 ```
 
-Once the initial synchronization finishes and items exist locally (`Item count > 0`), the background daemon will automatically keep synchronizing at your configured interval (`JOPLIN_sync_interval`).
+Once the initial synchronization finishes and items exist locally (`Item count > 0`), the background daemon will automatically keep synchronizing at your configured interval (`JOPLIN_sync_interval`). You can also trigger a sync at any time via the `POST /sync` API.
 
 ---
 
 ## 🔑 Retrieving the API Token & Usage
 
-Accessing the Joplin REST API requires an authentication token (`api.token`).
+Accessing the Joplin REST API and Gateway requires an authentication token (`api.token`).
 
 ### 1. Retrieve the API Token
 
@@ -151,47 +165,70 @@ Example output:
 a1b2c3d4e5f6... (64-character token)
 ```
 
-### 2. Test API Requests
+Use this value as your Bearer token in the `Authorization` header:
+```http
+Authorization: Bearer a1b2c3d4e5f6...
+```
+
+### 2. API Endpoints & Testing
 
 Send HTTP requests to port `41185` on your host:
 
-#### Health Check (`ping`)
+#### Health Check (`/ping`)
+Public healthcheck endpoint. Does not require authentication.
 ```bash
 curl http://localhost:41185/ping
 ```
-*Response: `JoplinClipperServer`*
+- **Response**: `200 OK` (`JoplinClipperServer`)
+
+#### Trigger Synchronization (`POST /sync`)
+Triggers an immediate `joplin sync` execution safely governed by the shared lock.
+```bash
+curl -X POST http://localhost:41185/sync \
+  -H "Authorization: Bearer <YOUR_API_TOKEN>"
+```
+- **Responses**:
+  - `200 OK`: `Sync completed` (synchronization finished successfully)
+  - `409 Conflict`: `Sync already running` (background sync or another API request is currently running)
+  - `401 Unauthorized`: `Unauthorized` (missing or invalid Bearer token)
+  - `405 Method Not Allowed`: `Method Not Allowed` (non-POST methods such as `GET` are rejected)
+  - `500 Internal Server Error`: `Sync failed` (Joplin sync returned an error)
 
 #### List Folders (Notebooks)
 ```bash
-curl "http://localhost:41185/folders?token=<YOUR_API_TOKEN>"
+curl http://localhost:41185/folders \
+  -H "Authorization: Bearer <YOUR_API_TOKEN>"
 ```
 
-#### List Notes
+#### List Notes (with Query Parameters)
+Existing query parameters are fully preserved:
 ```bash
-curl "http://localhost:41185/notes?token=<YOUR_API_TOKEN>"
+curl "http://localhost:41185/notes?fields=id,title,updated_time&limit=10" \
+  -H "Authorization: Bearer <YOUR_API_TOKEN>"
 ```
 
 #### Create a New Note
 ```bash
-curl -X POST "http://localhost:41185/notes?token=<YOUR_API_TOKEN>" \
+curl -X POST http://localhost:41185/notes \
+  -H "Authorization: Bearer <YOUR_API_TOKEN>" \
   -H "Content-Type: application/json" \
-  -d '{"title": "Docker API Test", "body": "Joplin Terminal API is working properly!"}'
+  -d '{"title": "Docker API Test", "body": "Joplin Terminal API Gateway is working properly!"}'
 ```
 
-For full API specifications, see the [Joplin Data API Official Documentation](https://joplinapp.org/help/api/references/rest_api).
+For full Joplin Data API specifications, see the [Joplin Data API Official Documentation](https://joplinapp.org/help/api/references/rest_api).
 
 ---
 
-## ⚙️ Additional Configuration
+## ⚙️ Port & Security Details
 
-### When Using OneDrive Sync
-If you use OneDrive as your sync target, you need to expose port `9967` in `docker-compose.yml` for OAuth redirect during initial authorization:
-
-```yaml
-ports:
-  - "41185:41185"
-  - "9967:9967"  # Port for OneDrive OAuth redirection
-```
+- **Port `41185` (Gateway)**: The only port published to external networks. It terminates incoming HTTP requests, enforces Bearer token authentication, manages sync locks, and forwards validated requests.
+- **Port `41184` (Internal Loopback)**: Joplin Terminal's internal Web Clipper server listens strictly on `127.0.0.1:41184`. It is not published outside the container.
+- **When Using OneDrive Sync**: If you use OneDrive as your sync target, expose port `9967` in `docker-compose.yml` for OAuth redirect during initial authorization:
+  ```yaml
+  ports:
+    - "41185:41185"
+    - "9967:9967"  # Port for OneDrive OAuth redirection
+  ```
 
 ### Version Notification & Upgrade Guide
 The container checks for the latest Joplin release upon startup. If a newer release is found, a notice is displayed in the container logs:

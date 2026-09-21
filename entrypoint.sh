@@ -70,7 +70,7 @@ joplin server start &
 sleep 5
 
 echo "[network] Starting socat HTTP gateway on 0.0.0.0:41185..."
-socat TCP-LISTEN:41185,fork,reuseaddr EXEC:/usr/local/bin/gateway.sh &
+socat TCP-LISTEN:41185,fork,reuseaddr EXEC:"sh /usr/local/bin/gateway.sh" &
 
 while true; do
   total_items=$(joplin status 2>/dev/null \
@@ -83,7 +83,7 @@ while true; do
   else
     echo "[sync] Starting remote synchronization (Item count: $total_items)..."
     sync_status=0
-    /usr/local/bin/gateway.sh --sync || sync_status=$?
+    sh /usr/local/bin/gateway.sh --sync || sync_status=$?
     if [ $sync_status -eq 2 ]; then
       echo "[sync] Synchronization already in progress by another task. Skipping this cycle."
     elif [ $sync_status -eq 0 ]; then

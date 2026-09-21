@@ -174,17 +174,20 @@ Authorization: Bearer a1b2c3d4e5f6...
 
 Send HTTP requests to port `41185` on your host:
 
+> **Tip (`127.0.0.1` vs `localhost`):**  
+> We recommend using `127.0.0.1` instead of `localhost`. Depending on host OS and Docker network configuration, `localhost` may resolve first to IPv6 (`::1`), leading to `Connection refused` if the container port is bound only to IPv4 (`0.0.0.0`).
+
 #### Health Check (`/ping`)
 Public healthcheck endpoint. Does not require authentication.
 ```bash
-curl http://localhost:41185/ping
+curl http://127.0.0.1:41185/ping
 ```
 - **Response**: `200 OK` (`JoplinClipperServer`)
 
 #### Trigger Synchronization (`POST /sync`)
 Triggers an immediate `joplin sync` execution safely governed by the shared lock.
 ```bash
-curl -X POST http://localhost:41185/sync \
+curl -X POST http://127.0.0.1:41185/sync \
   -H "Authorization: Bearer <YOUR_API_TOKEN>"
 ```
 - **Responses**:
@@ -196,20 +199,20 @@ curl -X POST http://localhost:41185/sync \
 
 #### List Folders (Notebooks)
 ```bash
-curl http://localhost:41185/folders \
+curl http://127.0.0.1:41185/folders \
   -H "Authorization: Bearer <YOUR_API_TOKEN>"
 ```
 
 #### List Notes (with Query Parameters)
-Existing query parameters are fully preserved:
+Existing query parameters are fully preserved (specify `body` in `?fields=` to fetch note contents):
 ```bash
-curl "http://localhost:41185/notes?fields=id,title,updated_time&limit=10" \
+curl "http://127.0.0.1:41185/notes?fields=id,title,body,updated_time&limit=10" \
   -H "Authorization: Bearer <YOUR_API_TOKEN>"
 ```
 
 #### Create a New Note
 ```bash
-curl -X POST http://localhost:41185/notes \
+curl -X POST http://127.0.0.1:41185/notes \
   -H "Authorization: Bearer <YOUR_API_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"title": "Docker API Test", "body": "Joplin Terminal API Gateway is working properly!"}'

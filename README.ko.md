@@ -172,17 +172,20 @@ a1b2c3d4e5f6... (64자리 토큰)
 
 호스트 또는 외부에서 `41185` 포트로 요청을 전송합니다:
 
+> **Tip (`127.0.0.1` vs `localhost`):**  
+> `localhost` 대신 `127.0.0.1` 사용을 권장합니다. 호스트 OS 및 Docker 환경에 따라 `localhost`가 IPv6(`::1`)로 먼저 해석되어 `Connection refused` 에러가 발생할 수 있으므로, 명시적으로 IPv4인 `127.0.0.1`을 지정하는 것이 가장 안정적입니다.
+
 #### 헬스체크 (`/ping`)
 공개 헬스체크 엔드포인트입니다. 별도의 인증 토큰이 필요하지 않습니다.
 ```bash
-curl http://localhost:41185/ping
+curl http://127.0.0.1:41185/ping
 ```
 - **응답**: `200 OK` (`JoplinClipperServer`)
 
 #### 동기화 즉시 실행 (`POST /sync`)
 공유 락 제어 하에 `joplin sync`를 즉시 실행합니다.
 ```bash
-curl -X POST http://localhost:41185/sync \
+curl -X POST http://127.0.0.1:41185/sync \
   -H "Authorization: Bearer <YOUR_API_TOKEN>"
 ```
 - **응답 코드 안내**:
@@ -194,20 +197,20 @@ curl -X POST http://localhost:41185/sync \
 
 #### 루트 폴더(노트북) 목록 조회
 ```bash
-curl http://localhost:41185/folders \
+curl http://127.0.0.1:41185/folders \
   -H "Authorization: Bearer <YOUR_API_TOKEN>"
 ```
 
 #### 노트 목록 조회 (쿼리 파라미터 지원)
-기존 Data API의 쿼리 파라미터가 그대로 유지됩니다:
+기존 Data API의 쿼리 파라미터가 그대로 유지됩니다 (노트 본문까지 조회하려면 `?fields=`에 `body`를 명시하세요):
 ```bash
-curl "http://localhost:41185/notes?fields=id,title,updated_time&limit=10" \
+curl "http://127.0.0.1:41185/notes?fields=id,title,body,updated_time&limit=10" \
   -H "Authorization: Bearer <YOUR_API_TOKEN>"
 ```
 
 #### 새 노트 생성
 ```bash
-curl -X POST http://localhost:41185/notes \
+curl -X POST http://127.0.0.1:41185/notes \
   -H "Authorization: Bearer <YOUR_API_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"title": "Docker API 테스트", "body": "Joplin Terminal API Gateway가 정상 동작합니다!"}'

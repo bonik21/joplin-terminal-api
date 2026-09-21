@@ -20,6 +20,12 @@ run_sync() {
   fi
 }
 
+send_direct_response() {
+  printf "%b" "$1"
+  sleep 0.05
+  exit 0
+}
+
 # Allow entrypoint.sh to invoke sync directly via CLI
 if [ "$1" = "--sync" ]; then
   run_sync
@@ -71,6 +77,8 @@ while IFS= read -r header_line; do
   esac
 done
 
+auth_token=$(echo "$auth_token" | tr -d '\r\n[:space:]')
+
 # Consume body if present
 body_file=""
 if [ -n "$content_length" ] && [ "$content_length" -gt 0 ] 2>/dev/null; then
@@ -97,26 +105,23 @@ fi
 # Route 1: /sync
 if [ "$path" = "/sync" ]; then
   if [ "$method" != "POST" ]; then
-    printf "HTTP/1.1 405 Method Not Allowed\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nMethod Not Allowed\r\n"
-    exit 0
+    send_direct_response "HTTP/1.1 405 Method Not Allowed\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nMethod Not Allowed\r\n"
   fi
 
   if [ -z "$auth_token" ] || { [ -n "$expected_token" ] && [ "$auth_token" != "$expected_token" ]; }; then
-    printf "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nUnauthorized\r\n"
-    exit 0
+    send_direct_response "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nUnauthorized\r\n"
   fi
 
   sync_res=0
   run_sync || sync_res=$?
 
   if [ $sync_res -eq 0 ]; then
-    printf "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nSync completed\r\n"
+    send_direct_response "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nSync completed\r\n"
   elif [ $sync_res -eq 2 ]; then
-    printf "HTTP/1.1 409 Conflict\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nSync already running\r\n"
+    send_direct_response "HTTP/1.1 409 Conflict\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nSync already running\r\n"
   else
-    printf "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nSync failed\r\n"
+    send_direct_response "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nSync failed\r\n"
   fi
-  exit 0
 fi
 
 # Route 2: /ping (Health check: public endpoint, no token required)
@@ -130,15 +135,14 @@ if [ "$path" = "/ping" ]; then
   fi
 
   if ! curl -s -i --http1.0 "http://127.0.0.1:41184${forward_uri}"; then
-    printf "HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nBad Gateway\r\n"
+    send_direct_response "HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nBad Gateway\r\n"
   fi
   exit 0
 fi
 
 # Route 3: Other Joplin Data API endpoints
 if [ -z "$auth_token" ]; then
-  printf "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nUnauthorized\r\n"
-  exit 0
+  send_direct_response "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nUnauthorized\r\n"
 fi
 
 # Convert Bearer token to ?token= query param
@@ -164,6 +168,6 @@ done < "$headers_file"
 curl_cmd="$curl_cmd \"http://127.0.0.1:41184${forward_uri}\""
 
 if ! eval "$curl_cmd"; then
-  printf "HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nBad Gateway\r\n"
+  send_direct_response "HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nBad Gateway\r\n"
 fi
 exit 0

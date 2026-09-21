@@ -10,7 +10,7 @@ run_sync() {
   fi
 
   if command -v joplin >/dev/null 2>&1; then
-    if joplin sync; then
+    if joplin sync >&2 2>&1; then
       return 0
     else
       return 1
@@ -100,6 +100,7 @@ path="${uri%%\?*}"
 expected_token=""
 if [ -f "$SETTINGS_FILE" ]; then
   expected_token=$(jq -r '."api.token" // empty' "$SETTINGS_FILE" 2>/dev/null || true)
+  expected_token=$(echo "$expected_token" | tr -d '\r\n[:space:]')
 fi
 
 # Route 1: /sync

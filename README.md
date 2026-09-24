@@ -85,7 +85,7 @@ Pre-built Docker images are automatically published to Docker Hub (`bonik21/jopl
 You do not need to clone the full repository. Simply prepare a `docker-compose.yml` and `.env` file in your workspace directory:
 
 ```bash
-mkdir joplin-api && cd joplin-api
+mkdir joplin-terminal-api && cd joplin-terminal-api
 ```
 
 #### Create `docker-compose.yml`

@@ -85,7 +85,7 @@ Joplin Terminal App에는 자체 Web Clipper 및 REST API를 구동할 수 있�
 저장소를 직접 clone할 필요 없이, 작업 디렉토리에 `docker-compose.yml`과 `.env` 파일만 준비하면 됩니다.
 
 ```bash
-mkdir joplin-api && cd joplin-api
+mkdir joplin-terminal-api && cd joplin-terminal-api
 ```
 
 #### `docker-compose.yml` 작성

@@ -1,0 +1,147 @@
+name: Build and Push Docker Images
+
+on:
+  schedule:
+    # 매일 00:00 UTC (한국 시간 09:00)에 신규 Joplin 버전 확인
+    - cron: '0 0 * * *'
+  push:
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+    inputs:
+      joplin_version:
+        description: 'Joplin version to build (leave empty for latest npm version)'
+        required: false
+        default: ''
+      force_build:
+        description: 'Force build even if Docker image tag already exists'
+        type: boolean
+        default: false
+
+jobs:
+  check-version:
+    name: Check Version and Determine Target
+    runs-on: ubuntu-latest
+    outputs:
+      joplin_version: ${{ steps.version-check.outputs.version }}
+      should_build: ${{ steps.version-check.outputs.should_build }}
+      target_branches: ${{ steps.target-branches.outputs.branches }}
+    steps:
+      - name: Determine Target Branches
+        id: target-branches
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # push 이벤트의 경우 변경된 브랜치만 빌드
+            echo "branches=[\"${{ github.ref_name }}\"]" >> $GITHUB_OUTPUT
+          else
+            # schedule이나 workflow_dispatch의 경우 main, dev 브랜치 모두 빌드
+            echo "branches=[\"main\", \"dev\"]" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check Joplin Version and Docker Hub
+        id: version-check
+        run: |
+          # 1. Joplin 버전 결정 (수동 입력값 우선, 없으면 npm view 조회)
+          INPUT_VERSION="${{ github.event.inputs.joplin_version }}"
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="$INPUT_VERSION"
+          else
+            VERSION=$(npm view joplin version)
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Target Joplin Version: $VERSION"
+
+          # 2. 강제 빌드 조건 (push 이벤트 또는 force_build = true)
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event.inputs.force_build }}" = "true" ]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "Triggered by ${{ github.event_name }} (force_build: ${{ github.event.inputs.force_build }}). Proceeding with build."
+            exit 0
+          fi
+
+          # 3. Docker Hub 태그 존재 여부 확인
+          AUTH_HEADER=""
+          if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] && [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            LOGIN_RESP=$(curl -s -H "Content-Type: application/json" -X POST \
+              -d '{"username": "${{ secrets.DOCKERHUB_USERNAME }}", "password": "${{ secrets.DOCKERHUB_TOKEN }}"}' \
+              https://hub.docker.com/v2/users/login/)
+            TOKEN=$(echo "$LOGIN_RESP" | jq -r '.token // empty')
+            if [ -n "$TOKEN" ]; then
+              AUTH_HEADER="Authorization: JWT $TOKEN"
+            fi
+          fi
+
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            ${AUTH_HEADER:+-H "$AUTH_HEADER"} \
+            "https://hub.docker.com/v2/repositories/bonik21/joplin-terminal-api/tags/${VERSION}/")
+
+          echo "Docker Hub tag check status code: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "Tag bonik21/joplin-terminal-api:${VERSION} already exists on Docker Hub."
+            echo "No new version found. Skipping build."
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          else
+            echo "Tag bonik21/joplin-terminal-api:${VERSION} does not exist on Docker Hub."
+            echo "New version detected! Triggering build."
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          fi
+
+  build-and-push:
+    name: Build and Push (${{ matrix.branch }})
+    needs: check-version
+    if: needs.check-version.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: ${{ fromJson(needs.check-version.outputs.target_branches) }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Determine Docker Image Tags
+        id: meta
+        run: |
+          REPO="bonik21/joplin-terminal-api"
+          VERSION="${{ needs.check-version.outputs.joplin_version }}"
+          
+          if [ "${{ matrix.branch }}" = "main" ]; then
+            # main 브랜치: <version> 및 latest
+            TAGS="${REPO}:${VERSION},${REPO}:latest"
+          elif [ "${{ matrix.branch }}" = "dev" ]; then
+            # dev 브랜치: <version>-dev 및 dev
+            TAGS="${REPO}:${VERSION}-dev,${REPO}:dev"
+          else
+            TAGS="${REPO}:${VERSION}-${{ matrix.branch }}"
+          fi
+          
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+          echo "Pushing tags for branch ${{ matrix.branch }}: $TAGS"
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            JOPLIN_VERSION=${{ needs.check-version.outputs.joplin_version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=${{ matrix.branch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.branch }}

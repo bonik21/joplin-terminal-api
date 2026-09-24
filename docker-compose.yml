@@ -1,8 +1,12 @@
 services:
   joplin-terminal-api:
     image: bonik21/joplin-terminal-api:latest
-    # For dev branch: bonik21/joplin-terminal-api:dev (or bonik21/joplin-terminal-api:<version>-dev)
-    # For specific Joplin version: bonik21/joplin-terminal-api:<version> (e.g. 3.7.1)
+    # Change the image tag above if you need a different version/channel.
+    # Examples:
+    #   bonik21/joplin-terminal-api:latest          - latest Joplin + joplin-terminal-api-stable
+    #   bonik21/joplin-terminal-api:dev             - latest Joplin + joplin-terminal-api-dev
+    #   bonik21/joplin-terminal-api:3.7.1           - 3.7.1 Joplin + joplin-terminal-api-stable
+    #   bonik21/joplin-terminal-api:3.7.1-dev       - 3.7.1 Joplin + joplin-terminal-api-dev
     container_name: joplin-terminal-api
     restart: unless-stopped
     ports:

@@ -1,10 +1,8 @@
 services:
   joplin-terminal-api:
-    build:
-      context: .
-      args:
-        JOPLIN_VERSION: ${JOPLIN_VERSION:-3.7.1}
-    image: joplin-terminal-api:${JOPLIN_VERSION:-3.7.1}
+    image: bonik21/joplin-terminal-api:latest
+    # For dev branch: bonik21/joplin-terminal-api:dev (or bonik21/joplin-terminal-api:<version>-dev)
+    # For specific Joplin version: bonik21/joplin-terminal-api:<version> (e.g. 3.7.1)
     container_name: joplin-terminal-api
     restart: unless-stopped
     ports:
@@ -15,5 +13,3 @@ services:
       - .env
     volumes:
       - ./joplin-data:/root/.config/joplin
-      - ./entrypoint.sh:/usr/bin/entrypoint.sh:ro
-      - ./gateway.sh:/usr/local/bin/gateway.sh:ro

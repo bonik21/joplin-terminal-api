@@ -59,31 +59,57 @@ Joplin Terminal App에는 자체 Web Clipper 및 REST API를 구동할 수 있�
 
 ---
 
+## 🚀 배포 이미지 및 태그 규칙
+
+이 프로젝트는 Docker Hub(`bonik21/joplin-terminal-api`)에 사전 빌드된 공식 이미지를 제공하므로, 저장소를 `git clone`하거나 직접 빌드할 필요 없이 즉시 사용할 수 있습니다.
+
+- **도커 이미지 태그 버전 = `joplin-terminal-app` 버전**입니다. 사용자는 원하는 Joplin 버전만 신경 쓰면 됩니다.
+- 게이트웨이(`joplin-terminal-api`)는 기본적으로 검증된 `main` 브랜치를 사용하며, 최신 개발 버전 코드가 필요한 경우 `-dev`가 붙은 태그를 사용합니다.
+
+| 이미지 태그 | Joplin 버전 | Joplin Terminal API 버전 | 설명 |
+|---|---|---|---|
+| `bonik21/joplin-terminal-api:latest` | 최신 릴리스 | `main` | **[권장]** 최신 Joplin + 안정 버전 API |
+| `bonik21/joplin-terminal-api:<version>` (예: `3.7.1`) | 지정 버전 (`3.7.1`) | `main` | 특정 Joplin 버전 고정 사용 |
+| `bonik21/joplin-terminal-api:dev` | 최신 릴리스 | `dev` | 최신 Joplin + 개발 중인 최신 API |
+| `bonik21/joplin-terminal-api:<version>-dev` (예: `3.7.1-dev`) | 지정 버전 (`3.7.1`) | `dev` | 특정 Joplin 버전 + 개발 중인 최신 API |
+
+---
+
 ## 🚀 빠른 시작 (설치 방법)
 
 ### 1. 사전 요구사항
 - [Docker](https://docs.docker.com/get-docker/) 및 [Docker Compose](https://docs.docker.com/compose/) 설치
 
-### 2. 저장소 클론 및 환경 설정
+### 2. 디렉터리 준비 및 설정 파일 생성
+
+저장소를 직접 clone할 필요 없이, 작업 디렉토리에 `docker-compose.yml`과 `.env` 파일만 준비하면 됩니다.
 
 ```bash
-# 저장소 복제 (또는 작업 디렉토리 생성)
-git clone https://github.com/bonik21/joplin-terminal-api.git
-cd joplin-terminal-api
-
-# 환경 설정 파일 복사 (한국어 주석 템플릿 사용 시 .env-example.ko 복사)
-cp .env-example.ko .env
-# 또는 기본 템플릿 복사: cp .env-example .env
+mkdir joplin-api && cd joplin-api
 ```
 
-### 3. `.env` 파일 편집
+#### `docker-compose.yml` 작성
+```yaml
+services:
+  joplin-terminal-api:
+    image: bonik21/joplin-terminal-api:latest
+    container_name: joplin-terminal-api
+    restart: unless-stopped
+    ports:
+      - "41185:41185"
+      # [선택] OneDrive를 동기화 대상으로 사용하는 경우 OAuth 인증 리디렉션을 위해 주석 해제
+      # - "9967:9967"
+    env_file:
+      - .env
+    volumes:
+      - ./joplin-data:/root/.config/joplin
+```
 
-`.env` 파일을 열어 본인의 Joplin 동기화 환경에 맞게 수정합니다.
+### 3. `.env` 파일 작성 및 편집
+
+Joplin 동기화 환경에 맞게 `.env` 파일을 생성합니다. (`JOPLIN_VERSION`은 이미지 태그로 관리되므로 명시할 필요가 없습니다.)
 
 ```ini
-# 원하는 Joplin 버전 (기본값: 3.7.1)
-JOPLIN_VERSION=3.7.1
-
 # 로케일 및 시간 포맷
 JOPLIN_locale=ko
 JOPLIN_dateFormat=YYYY-MM-DD
@@ -111,10 +137,12 @@ JOPLIN_sync_interval=300
 >   - 예: `JOPLIN_sync_9_path=...` ➔ `"sync.9.path": "..."`  
 > - **한국어 로케일 주의**: `ko_KR`이 아닌 `ko`로 설정해야 정상 인식됩니다. (예: `JOPLIN_locale=ko`)
 
-### 4. 컨테이너 빌드 및 실행
+### 4. 컨테이너 실행
+
+이미지를 직접 빌드할 필요 없이 Docker Compose로 즉시 실행합니다:
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
 실행 상태 및 로그를 확인합니다:
@@ -241,12 +269,15 @@ curl -X POST http://127.0.0.1:41185/notes \
  Current running version: va.b.c
 
  To upgrade:
-   1. Update 'JOPLIN_VERSION=x.y.z' in your .env file
-   2. Rebuild the container: docker compose up -d --build
+   Update image tag in docker-compose.yml or pull the latest image:
+   docker compose pull && docker compose up -d
 --------------------------------------------------
 ```
 
-알림이 뜨면 안내에 따라 `.env` 파일의 `JOPLIN_VERSION` 값을 새 버전으로 수정한 후, `docker compose up -d --build`를 실행하여 새 버전으로 컨테이너를 다시 빌드하시면 됩니다.
+알림이 뜨면 안내에 따라 `docker-compose.yml` 파일의 이미지 태그를 변경하거나 `latest` 이미지를 새로 pull 받아 컨테이너를 재시작하시면 됩니다:
+```bash
+docker compose pull && docker compose up -d
+```
 
 ---
 

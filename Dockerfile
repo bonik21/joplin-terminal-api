@@ -1,5 +1,5 @@
 FROM alpine:3.23 AS build
-ARG JOPLIN_VERSION
+ARG JOPLIN_VERSION=latest
 RUN apk add --no-cache nodejs npm
 RUN NPM_CONFIG_PREFIX=/app/joplin npm install --omit=dev --no-audit --no-fund -g joplin@${JOPLIN_VERSION} \
     && find /app/joplin -type f \( -name '*.map' -o -name '*.md' -o -name '*.d.ts' \) -delete \

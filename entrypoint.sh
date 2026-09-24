@@ -30,8 +30,8 @@ if [ -n "$latest" ] && [ -n "$current" ]; then
     echo " Current running version: v$current"
     echo ""
     echo " To upgrade:"
-    echo "   1. Update 'JOPLIN_VERSION=$latest' in your .env file"
-    echo "   2. Rebuild the container: docker compose up -d --build"
+    echo "   Update image tag in docker-compose.yml or pull the latest image:"
+    echo "   docker compose pull && docker compose up -d"
     echo "--------------------------------------------------"
   else
     echo "[info] Joplin Terminal App is currently up to date (v$current)."

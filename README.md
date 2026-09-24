@@ -59,31 +59,57 @@ This project cleanly overcomes these limitations with:
 
 ---
 
+## 🚀 Distribution Images & Tagging Policy
+
+Pre-built Docker images are automatically published to Docker Hub (`bonik21/joplin-terminal-api`). You can use the container directly without cloning the repository or building from source.
+
+- **Docker image tag = `joplin-terminal-app` version**. Users only need to select their desired Joplin version.
+- The HTTP Gateway (`joplin-terminal-api`) defaults to the stable `main` branch. For testing the latest development features, use tags ending with `-dev`.
+
+| Image Tag | Joplin Version | Joplin Terminal API Version | Description |
+|---|---|---|---|
+| `bonik21/joplin-terminal-api:latest` | Latest release | `main` | **[Recommended]** Latest Joplin + stable API gateway |
+| `bonik21/joplin-terminal-api:<version>` (e.g. `3.7.1`) | Specified version (`3.7.1`) | `main` | Fixed Joplin version + stable API gateway |
+| `bonik21/joplin-terminal-api:dev` | Latest release | `dev` | Latest Joplin + development API gateway |
+| `bonik21/joplin-terminal-api:<version>-dev` (e.g. `3.7.1-dev`) | Specified version (`3.7.1`) | `dev` | Fixed Joplin version + development API gateway |
+
+---
+
 ## 🚀 Quick Start (Installation)
 
 ### 1. Prerequisites
 - [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/) installed
 
-### 2. Clone Repository & Set Up Environment
+### 2. Directory & Configuration Setup
+
+You do not need to clone the full repository. Simply prepare a `docker-compose.yml` and `.env` file in your workspace directory:
 
 ```bash
-# Clone repository
-git clone https://github.com/bonik21/joplin-terminal-api.git
-cd joplin-terminal-api
-
-# Copy environment configuration template
-cp .env-example .env
-# (For Korean template, copy: cp .env-example.ko .env)
+mkdir joplin-api && cd joplin-api
 ```
 
-### 3. Configure `.env` File
+#### Create `docker-compose.yml`
+```yaml
+services:
+  joplin-terminal-api:
+    image: bonik21/joplin-terminal-api:latest
+    container_name: joplin-terminal-api
+    restart: unless-stopped
+    ports:
+      - "41185:41185"
+      # [Optional] Uncomment if you use OneDrive as sync target (OAuth redirect port)
+      # - "9967:9967"
+    env_file:
+      - .env
+    volumes:
+      - ./joplin-data:/root/.config/joplin
+```
 
-Edit the `.env` file to match your Joplin synchronization setup:
+### 3. Create & Configure `.env` File
+
+Create a `.env` file for your Joplin sync configuration (`JOPLIN_VERSION` is managed via the Docker image tag, so it is no longer required in `.env`):
 
 ```ini
-# Desired Joplin version (Default: 3.7.1)
-JOPLIN_VERSION=3.7.1
-
 # Locale and Date/Time format
 JOPLIN_locale=en_GB
 JOPLIN_dateFormat=DD/MM/YYYY
@@ -111,10 +137,12 @@ JOPLIN_sync_interval=300
 >   - E.g. `JOPLIN_sync_9_path=...` ➔ `"sync.9.path": "..."`  
 > - **Korean Locale Note**: Use `ko` instead of `ko_KR` (e.g. `JOPLIN_locale=ko`).
 
-### 4. Build & Run the Container
+### 4. Run the Container
+
+Run the container using Docker Compose (Docker will automatically pull the image):
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
 View startup logs:
@@ -242,12 +270,15 @@ The container checks for the latest Joplin release upon startup. If a newer rele
  Current running version: va.b.c
 
  To upgrade:
-   1. Update 'JOPLIN_VERSION=x.y.z' in your .env file
-   2. Rebuild the container: docker compose up -d --build
+   Update image tag in docker-compose.yml or pull the latest image:
+   docker compose pull && docker compose up -d
 --------------------------------------------------
 ```
 
-When notified, simply update `JOPLIN_VERSION` in your `.env` file and rebuild the container with `docker compose up -d --build`.
+When notified, simply update the image tag in your `docker-compose.yml` file (or pull the updated `latest` image) and restart the container:
+```bash
+docker compose pull && docker compose up -d
+```
 
 ---
 

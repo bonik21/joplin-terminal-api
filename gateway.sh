@@ -72,7 +72,7 @@ while IFS= read -r header_line; do
       ;;
     *)
       # Preserve other headers
-      echo "-H \"$header_name: $header_val\"" >> "$headers_file"
+      echo "$header_line" >> "$headers_file"
       ;;
   esac
 done
@@ -128,6 +128,7 @@ fi
 # Route 2: /ping (Health check: public endpoint, no token required)
 if [ "$path" = "/ping" ]; then
   forward_uri="$uri"
+
   if [ -n "$auth_token" ]; then
     case "$uri" in
       *\?*) forward_uri="${uri}&token=${auth_token}" ;;
@@ -138,6 +139,7 @@ if [ "$path" = "/ping" ]; then
   if ! curl -s -i --http1.0 "http://127.0.0.1:41184${forward_uri}"; then
     send_direct_response "HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nBad Gateway\r\n"
   fi
+
   exit 0
 fi
 
@@ -152,23 +154,31 @@ case "$uri" in
   *) forward_uri="${uri}?token=${auth_token}" ;;
 esac
 
-curl_cmd="curl -s -i --http1.0 -X \"$method\""
+# Build curl arguments without eval.
+# Each argument remains a separate shell argument.
+set -- curl -s -i --http1.0 -X "$method"
 
 if [ -n "$body_file" ] && [ -s "$body_file" ]; then
-  curl_cmd="$curl_cmd --data-binary @\"$body_file\""
+  set -- "$@" --data-binary "@$body_file"
 fi
 
 if [ -n "$content_type" ]; then
-  curl_cmd="$curl_cmd -H \"Content-Type: $content_type\""
+  set -- "$@" -H "Content-Type: $content_type"
 fi
 
 while IFS= read -r h; do
-  [ -n "$h" ] && curl_cmd="$curl_cmd $h"
+  [ -n "$h" ] || continue
+
+  header_name=$(echo "$h" | cut -d: -f1)
+  header_val=$(echo "$h" | cut -d: -f2- | sed -e 's/^[[:space:]]*//')
+
+  set -- "$@" -H "$header_name: $header_val"
 done < "$headers_file"
 
-curl_cmd="$curl_cmd \"http://127.0.0.1:41184${forward_uri}\""
+set -- "$@" "http://127.0.0.1:41184${forward_uri}"
 
-if ! eval "$curl_cmd"; then
+if ! "$@"; then
   send_direct_response "HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nBad Gateway\r\n"
 fi
+
 exit 0
